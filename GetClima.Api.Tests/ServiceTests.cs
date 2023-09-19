@@ -9,14 +9,17 @@ using PrevisaoClimatica.Api.Extensions;
 using static Dapper.SqlMapper;
 using System.Net.Http;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using System.Net.Mail;
+using static System.Net.WebRequestMethods;
 
 namespace GetClima.Api.Tests
 {
-    public class RepositoryTests
+    public class ServiceTests
     {
 
         [Fact(DisplayName = "Adicionar aeroportoPrevisao com Sucesso")]
-        public async void AeroportoPrevisaoRepository_Adicionar()
+        public async void AeroportoPrevisaoService_Adicionar()
         {
             var aeroportoPrevisao = new AeroportoPrevisao
             {
@@ -35,22 +38,24 @@ namespace GetClima.Api.Tests
             var _cidadePrevisaoRepository = new Mock<ICidadePrevisaoRepository>();
             var _httpClient = new Mock<HttpClient>();
             var _appSettings = new Mock<IOptions<AppSettings>>();
-
+            var _notificador = new Mock<INotificador>();
+            var _logger = new Mock<ILogger>();
 
             var clienteService = new ClimaService(_httpClient.Object,
                 _appSettings.Object,
                 _aeroportoPrevisaoRepository.Object,
                 _cidadePrevisaoRepository.Object,
-                _logsRepository.Object);
+                _logsRepository.Object,
+                _notificador.Object,
+                _logger.Object);
 
-            await clienteService.ObterClimaCidade(160);
+            await clienteService.ObterClimaCidade("SDFT");
 
             mocker.GetMock<IAeroportoPrevisaoRepository>().Verify(r => r.Adicionar(aeroportoPrevisao), Times.Once);
-
         }
 
         [Fact(DisplayName = "Adicionar aeroportoPrevisao com Sucesso")]
-        public async void CidadePrevisaoRepository_Adicionar()
+        public async void CidadePrevisaoService_Adicionar()
         {
             var cidadePrevisao = new CidadePrevisao
             {
@@ -70,13 +75,16 @@ namespace GetClima.Api.Tests
             var _cidadePrevisaoRepository = new Mock<ICidadePrevisaoRepository>();
             var _httpClient = new Mock<HttpClient>();
             var _appSettings = new Mock<IOptions<AppSettings>>();
-
+            var _notificador = new Mock<INotificador>();
+            var _logger = new Mock<ILogger>();
 
             var clienteService = new ClimaService(_httpClient.Object,
                 _appSettings.Object,
                 _aeroportoPrevisaoRepository.Object,
                 _cidadePrevisaoRepository.Object,
-                _logsRepository.Object);
+                _logsRepository.Object,
+                _notificador.Object,
+                _logger.Object);
 
             await clienteService.ObterClimaAeroporto("SDRT");
 
