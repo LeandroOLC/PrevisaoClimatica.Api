@@ -26,4 +26,5 @@ namespace PrevisaoClimatica.Api.Models
 
         public int Tempo { get; set; }
     }
+
 }

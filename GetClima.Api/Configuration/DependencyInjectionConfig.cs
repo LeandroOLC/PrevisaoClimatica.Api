@@ -14,6 +14,8 @@ namespace PrevisaoClimatica.Api.Configuration
             services.AddScoped<IAeroportoPrevisaoRepository, AeroportoPrevisaoRepository>();
             services.AddScoped<ICidadePrevisaoRepository, CidadePrevisaoRepository>();
             services.AddScoped<ILogsRepository, LogsRepository>();
+
+            services.AddScoped<INotificador, Notificador>();
         }
     }
 }

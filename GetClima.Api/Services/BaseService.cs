@@ -1,10 +1,45 @@
 ﻿using System.Text.Json;
 using System.Text;
+using PrevisaoClimatica.Api.Models;
+using FluentValidation;
+using PrevisaoClimatica.Api.Interfaces;
+using FluentValidation.Results;
 
 namespace PrevisaoClimatica.Api.Services
 {
-    public abstract class Service
+    public abstract class BaseService
     {
+        private readonly INotificador _notificador;
+
+        protected BaseService(INotificador notificador)
+        {
+            _notificador = notificador;
+        }
+
+        protected void Notificar(ValidationResult validationResult)
+        {
+            foreach (var error in validationResult.Errors)
+            {
+                Notificar(error.ErrorMessage);
+            }
+        }
+
+        protected void Notificar(string mensagem)
+        {
+            _notificador.Handle(new Notificacao(mensagem));
+        }
+
+        protected bool ExecutarValidacao<TV, TE>(TV validacao, TE entidade) where TV : AbstractValidator<TE> 
+        {
+            var validator = validacao.Validate(entidade);
+
+            if (validator.IsValid) return true;
+
+            Notificar(validator);
+
+            return false;
+        }
+
         protected StringContent ObterConteudo(object dado)
         {
             return new StringContent(
@@ -31,7 +66,6 @@ namespace PrevisaoClimatica.Api.Services
                 case 403:
                 case 404:
                 case 500:
-                    throw new Exception();
 
                 case 400:
                     return false;
@@ -40,32 +74,5 @@ namespace PrevisaoClimatica.Api.Services
             response.EnsureSuccessStatusCode();
             return true;
         }
-
-        protected ResponseResult RetornoOk()
-        {
-            return new ResponseResult();
-        }
-    }
-
-    public class ResponseResult
-    {
-        public ResponseResult()
-        {
-            Errors = new ResponseErrorMessages();
-        }
-
-        public string Title { get; set; }
-        public int Status { get; set; }
-        public ResponseErrorMessages Errors { get; set; }
-    }
-
-    public class ResponseErrorMessages
-    {
-        public ResponseErrorMessages()
-        {
-            Mensagens = new List<string>();
-        }
-
-        public List<string> Mensagens { get; set; }
     }
 }

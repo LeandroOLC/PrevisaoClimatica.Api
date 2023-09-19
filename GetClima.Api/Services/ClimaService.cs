@@ -7,18 +7,22 @@ using PrevisaoClimatica.Api.Models;
 
 namespace PrevisaoClimatica.Api.Services
 {
-    public class ClimaService : Service, IClimaService
+    public class ClimaService : BaseService, IClimaService
     {
         private readonly HttpClient _httpClient;
         private readonly IAeroportoPrevisaoRepository _aeroportoPrevisaoRepository;
         private readonly ICidadePrevisaoRepository _cidadePrevisaoRepository;
         private readonly ILogsRepository _logsRepository;
+        private readonly ILogger _logger;
 
         public ClimaService(HttpClient httpClient,
                               IOptions<AppSettings> settings,
                               IAeroportoPrevisaoRepository aeroportoPrevisaoRepository,
                               ICidadePrevisaoRepository cidadePrevisaoRepository,
-                              ILogsRepository logsRepository)
+                              ILogsRepository logsRepository,
+                              INotificador notificador,
+                              ILogger logger) : base(notificador)
+
         {
             httpClient.BaseAddress = new Uri(settings.Value?.CptecBrasilApiUrl ?? default);
             _httpClient = httpClient;
@@ -26,21 +30,35 @@ namespace PrevisaoClimatica.Api.Services
             _aeroportoPrevisaoRepository = aeroportoPrevisaoRepository;
             _cidadePrevisaoRepository = cidadePrevisaoRepository;
             _logsRepository = logsRepository;
+            _logger = logger;
         }
 
-        public async Task<CidadePrevisaoDTO> ObterClimaCidade(int cidadeId)
+        public async Task<CidadePrevisaoDTO> ObterClimaCidade(string nomeCidade)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"/api/cptec/v1/clima/previsao/{cidadeId}");
+                _logger.LogInformation("Consultando id da cidade : " + nomeCidade);
 
-                if (response.StatusCode == HttpStatusCode.NotFound) return null;
+                var cidadeId = ObterCidade(nomeCidade);
+
+                _logger.LogInformation("Consultando prévisão da cidade : " + nomeCidade);
+
+                var response = await _httpClient.GetAsync($"/api/cptec/v1/clima/previsao/{cidadeId}");
 
                 TratarErrosResponse(response);
 
-                var cidadePrevisao = await DeserializarObjetoResponse<CidadePrevisaoDTO>(response);
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    await NotificarErroResponse(response);
+
+                    return null;
+                }
+
+               var cidadePrevisao = await DeserializarObjetoResponse<CidadePrevisaoDTO>(response);
 
                 _cidadePrevisaoRepository.Adicionar(MapCidadePrevisao(cidadePrevisao));
+
+                _logger.LogInformation("Inserindo informações no banco : " + nomeCidade);
 
                 return cidadePrevisao;
             }
@@ -55,15 +73,24 @@ namespace PrevisaoClimatica.Api.Services
         {
             try
             {
+                _logger.LogInformation("Consultando clima do aeroporto: " + icao);
+
                 var response = await _httpClient.GetAsync($"/api/cptec/v1/clima/aeroporto/{icao}");
 
-                if (response.StatusCode == HttpStatusCode.NotFound) return null;
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    await NotificarErroResponse(response);
+
+                    return null;
+                }
 
                 TratarErrosResponse(response);
 
                 var aeroportoPrevisao = await DeserializarObjetoResponse<AeroportoPrevisaoDTO>(response);
 
                 _aeroportoPrevisaoRepository.Adicionar(MapAeroportoPrevisao(aeroportoPrevisao));
+
+                _logger.LogInformation("Inserindo informações no aeroporto : " + icao);
 
                 return aeroportoPrevisao;
             }
@@ -78,13 +105,27 @@ namespace PrevisaoClimatica.Api.Services
         {
             var response = await _httpClient.GetAsync($"/api/cptec/v1/cidade/{nomeCidade}");
 
-            if (response.StatusCode == HttpStatusCode.NotFound) return null;
-
             TratarErrosResponse(response);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                await NotificarErroResponse(response);
+
+                return null;
+            }
 
             var cidade = await DeserializarObjetoResponse<List<CidadeDTO>>(response);
 
             return cidade.First();
+        }
+
+        private async Task NotificarErroResponse(HttpResponseMessage response)
+        {
+            var mensagem = await DeserializarObjetoResponse<MensagemDTO>(response);
+
+            _logger.LogError( $"Erro ao consulta : {response.RequestMessage.RequestUri} mensagem erro : {mensagem.type} - {mensagem.message}");
+
+            Notificar($"{mensagem.type} - {mensagem.message}");
         }
 
         private AeroportoPrevisao MapAeroportoPrevisao(AeroportoPrevisaoDTO aeroportoPrevisaoDTO)

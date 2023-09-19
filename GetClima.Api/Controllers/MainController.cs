@@ -3,81 +3,64 @@ using System.Linq;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using PrevisaoClimatica.Api.Interfaces;
 using PrevisaoClimatica.Api.Models;
 
 namespace PrevisaoClimatica.Api.Controllers
 {
     [ApiController]
-    public abstract class MainController : Controller
+    public abstract class MainController : ControllerBase
     {
-        protected ICollection<string> Erros = new List<string>();
+        private readonly INotificador _notificador;
+        
+        protected MainController(INotificador notificador)
+        {
+            _notificador = notificador;
+           
+        }
+
+        protected bool OperacaoValida()
+        {
+            return !_notificador.TemNotificacao();
+        }
 
         protected ActionResult CustomResponse(object result = null)
         {
             if (OperacaoValida())
             {
-                return Ok(result);
+                return Ok(new
+                {
+                    success = true,
+                    data = result
+                });
             }
 
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]>
+            return BadRequest(new
             {
-                { "Mensagens", Erros.ToArray() }
-            }));
+                success = false,
+                errors = _notificador.ObterNotificacoes().Select(n => n.Mensagem)
+            });
         }
 
         protected ActionResult CustomResponse(ModelStateDictionary modelState)
         {
+            if (!modelState.IsValid) NotificarErroModelInvalida(modelState);
+            return CustomResponse();
+        }
+
+        protected void NotificarErroModelInvalida(ModelStateDictionary modelState)
+        {
             var erros = modelState.Values.SelectMany(e => e.Errors);
             foreach (var erro in erros)
             {
-                AdicionarErroProcessamento(erro.ErrorMessage);
+                var errorMsg = erro.Exception == null ? erro.ErrorMessage : erro.Exception.Message;
+                NotificarErro(errorMsg);
             }
-
-            return CustomResponse();
         }
 
-        protected ActionResult CustomResponse(ValidationResult validationResult)
+        protected void NotificarErro(string mensagem)
         {
-            foreach (var erro in validationResult.Errors)
-            {
-                AdicionarErroProcessamento(erro.ErrorMessage);
-            }
-
-            return CustomResponse();
-        }
-
-        protected ActionResult CustomResponse(ResponseResult resposta)
-        {
-            ResponsePossuiErros(resposta);
-
-            return CustomResponse();
-        }
-
-        protected bool ResponsePossuiErros(ResponseResult resposta)
-        {
-            if (resposta == null || !resposta.Errors.Mensagens.Any()) return false;
-
-            foreach (var mensagem in resposta.Errors.Mensagens)
-            {
-                AdicionarErroProcessamento(mensagem);
-            }
-
-            return true;
-        }
-
-        protected bool OperacaoValida()
-        {
-            return !Erros.Any();
-        }
-
-        protected void AdicionarErroProcessamento(string erro)
-        {
-            Erros.Add(erro);
-        }
-
-        protected void LimparErrosProcessamento()
-        {
-            Erros.Clear();
+            _notificador.Handle(new Notificacao(mensagem));
         }
     }
 }

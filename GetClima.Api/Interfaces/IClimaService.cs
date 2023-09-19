@@ -4,7 +4,7 @@ namespace PrevisaoClimatica.Api.Interfaces
 {
     public interface IClimaService
     {
-        Task<CidadePrevisaoDTO> ObterClimaCidade(int cidadeId);
+        Task<CidadePrevisaoDTO> ObterClimaCidade(string nomeCidade);
 
         Task<AeroportoPrevisaoDTO> ObterClimaAeroporto(string icao);
 
